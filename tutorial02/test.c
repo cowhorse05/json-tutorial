@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "leptjson.h"
-
+#include<float.h>
 static int main_ret = 0;
 static int test_count = 0;
 static int test_pass = 0;
@@ -70,6 +70,23 @@ static void test_parse_number() {
     TEST_NUMBER(1.234E+10, "1.234E+10");
     TEST_NUMBER(1.234E-10, "1.234E-10");
     TEST_NUMBER(0.0, "1e-10000"); /* must underflow */
+
+    /*加入维基百科双精度浮点数边界值测试 */
+    /* 使用标准库定义的常量*/
+    char buffer[64];
+    
+    /* 测试 DBL_MIN*/
+    sprintf(buffer, "%.17e", DBL_MIN);
+    TEST_NUMBER(DBL_MIN, buffer);
+    
+    /* 测试 DBL_MAX  */
+    sprintf(buffer, "%.17e", DBL_MAX);
+    TEST_NUMBER(DBL_MAX, buffer);
+    
+    /* 测试 -DBL_MAX*/
+    sprintf(buffer, "%.17e", -DBL_MAX);
+    TEST_NUMBER(-DBL_MAX, buffer);
+
 }
 
 #define TEST_ERROR(error, json)\
@@ -88,8 +105,8 @@ static void test_parse_expect_value() {
 static void test_parse_invalid_value() {
     TEST_ERROR(LEPT_PARSE_INVALID_VALUE, "nul");
     TEST_ERROR(LEPT_PARSE_INVALID_VALUE, "?");
+/*此处if 0相当于禁用一段代码 */
 
-#if 0
     /* invalid number */
     TEST_ERROR(LEPT_PARSE_INVALID_VALUE, "+0");
     TEST_ERROR(LEPT_PARSE_INVALID_VALUE, "+1");
@@ -99,25 +116,23 @@ static void test_parse_invalid_value() {
     TEST_ERROR(LEPT_PARSE_INVALID_VALUE, "inf");
     TEST_ERROR(LEPT_PARSE_INVALID_VALUE, "NAN");
     TEST_ERROR(LEPT_PARSE_INVALID_VALUE, "nan");
-#endif
+
 }
 
 static void test_parse_root_not_singular() {
     TEST_ERROR(LEPT_PARSE_ROOT_NOT_SINGULAR, "null x");
 
-#if 0
+
     /* invalid number */
     TEST_ERROR(LEPT_PARSE_ROOT_NOT_SINGULAR, "0123"); /* after zero should be '.' , 'E' , 'e' or nothing */
     TEST_ERROR(LEPT_PARSE_ROOT_NOT_SINGULAR, "0x0");
     TEST_ERROR(LEPT_PARSE_ROOT_NOT_SINGULAR, "0x123");
-#endif
+
 }
 
 static void test_parse_number_too_big() {
-#if 0
     TEST_ERROR(LEPT_PARSE_NUMBER_TOO_BIG, "1e309");
     TEST_ERROR(LEPT_PARSE_NUMBER_TOO_BIG, "-1e309");
-#endif
 }
 
 static void test_parse() {

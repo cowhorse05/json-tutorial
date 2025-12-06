@@ -12,32 +12,35 @@
 #define EXPECT(c, ch)       do { assert(*c->json == (ch)); c->json++; } while(0)
 #define ISDIGIT(ch)         ((ch) >= '0' && (ch) <= '9')
 #define ISDIGIT1TO9(ch)     ((ch) >= '1' && (ch) <= '9')
+/*这个宏也是大佬的巧思，先给强转到*char类型，然后把ch 赋值给他*/
 #define PUTC(c, ch)         do { *(char*)lept_context_push(c, sizeof(char)) = (ch); } while(0)
 
+/*动态堆栈*/
 typedef struct {
     const char* json;
     char* stack;
     size_t size, top;
 }lept_context;
 
+/*返回新分配空间的起始位置，此处已经改变了c->top，所以parse_string的求长度直接用*/
 static void* lept_context_push(lept_context* c, size_t size) {
     void* ret;
     assert(size > 0);
-    if (c->top + size >= c->size) {
+    if (c->top + size >= c->size) { /*空间不足，size为要push进来的单词的size*/
         if (c->size == 0)
             c->size = LEPT_PARSE_STACK_INIT_SIZE;
         while (c->top + size >= c->size)
-            c->size += c->size >> 1;  /* c->size * 1.5 */
-        c->stack = (char*)realloc(c->stack, c->size);
+            c->size += c->size >> 1;  /* c->size * 1.5 */ /*请求size很大的时候，1.5倍动态拓展*/
+        c->stack = (char*)realloc(c->stack, c->size); /*分配空间*/
     }
-    ret = c->stack + c->top;
-    c->top += size;
+    ret = c->stack + c->top;/* 返回新分配空间的起始位置*/
+    c->top += size; /*更新栈顶位置*/
     return ret;
 }
 
 static void* lept_context_pop(lept_context* c, size_t size) {
     assert(c->top >= size);
-    return c->stack + (c->top -= size);
+    return c->stack + (c->top -= size); /*返回单词的起始位置，对应上面的ret*/
 }
 
 static void lept_parse_whitespace(lept_context* c) {
@@ -94,16 +97,38 @@ static int lept_parse_string(lept_context* c, lept_value* v) {
     for (;;) {
         char ch = *p++;
         switch (ch) {
-            case '\"':
-                len = c->top - head;
+            case '\"': /*根据字符串判断方法，遇到结束引号*/
+                len = c->top - head; 
                 lept_set_string(v, (const char*)lept_context_pop(c, len), len);
                 c->json = p;
                 return LEPT_PARSE_OK;
-            case '\0':
+            case '\\': 
+                switch (*p++) {
+                    case '\"': PUTC(c, '\"'); break;
+                    case '\\': PUTC(c, '\\'); break;
+                    case '/':  PUTC(c, '/');  break;
+                    case 'b':  PUTC(c, '\b'); break;
+                    case 'f':  PUTC(c, '\f'); break;
+                    case 'n':  PUTC(c, '\n'); break;
+                    case 'r':  PUTC(c, '\r'); break;
+                    case 't':  PUTC(c, '\t'); break;
+                    case '\0':
+                        c->top = head;
+                        return LEPT_PARSE_MISS_QUOTATION_MARK;
+                    default:
+                        c->top = head;
+                        return LEPT_PARSE_INVALID_STRING_ESCAPE;
+                }
+                break;
+            case '\0':/*未正常结束*/
                 c->top = head;
                 return LEPT_PARSE_MISS_QUOTATION_MARK;
             default:
-                PUTC(c, ch);
+                if((unsigned char) ch < 0x20){
+                    c->top = head;
+                    return LEPT_PARSE_INVALID_STRING_CHAR;
+                }
+                PUTC(c, ch); /*直接压入栈*/
         }
     }
 }
@@ -126,7 +151,7 @@ int lept_parse(lept_value* v, const char* json) {
     c.json = json;
     c.stack = NULL;
     c.size = c.top = 0;
-    lept_init(v);
+    lept_init(v); /*直接把type置为LEPT_NULL */
     lept_parse_whitespace(&c);
     if ((ret = lept_parse_value(&c, v)) == LEPT_PARSE_OK) {
         lept_parse_whitespace(&c);
@@ -153,12 +178,15 @@ lept_type lept_get_type(const lept_value* v) {
 }
 
 int lept_get_boolean(const lept_value* v) {
-    /* \TODO */
-    return 0;
+    assert(v != NULL && (v->type == LEPT_TRUE || v->type == LEPT_FALSE));
+    return v->type == LEPT_TRUE;
 }
 
 void lept_set_boolean(lept_value* v, int b) {
-    /* \TODO */
+    
+    assert(v != NULL);
+    lept_free(v);
+    v->type = b ?LEPT_TRUE : LEPT_FALSE;
 }
 
 double lept_get_number(const lept_value* v) {
@@ -167,7 +195,10 @@ double lept_get_number(const lept_value* v) {
 }
 
 void lept_set_number(lept_value* v, double n) {
-    /* \TODO */
+    assert(v != NULL );
+    lept_free(v);
+    v->u.n = n;
+    v->type = LEPT_NUMBER;
 }
 
 const char* lept_get_string(const lept_value* v) {
