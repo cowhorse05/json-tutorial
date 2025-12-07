@@ -347,7 +347,40 @@ int lept_parse(lept_value* v, const char* json) {
 }
 
 static void lept_stringify_string(lept_context* c, const char* s, size_t len) {
-    /* ... */
+    /*生成字符串,把 s里面的字符串复制到c->json*/
+    /*PUTC是压栈输入，PUTS为输出*/
+    /*c->json = malloc(len*sizeof(char))*/;
+    PUTS(c, "\"",1); 
+    size_t i;
+
+    for(i = 0; i < len; ++i){
+        char ch = s[i];
+        switch (ch) {
+            /*转义字符*/
+            case '\"': PUTS(c, "\\\"",2); break;
+            case '\\': PUTS(c, "\\\\",2); break;
+            /*case '/':  PUTS(c, "/",2); break;*/
+            case '\b':  PUTS(c, "\\b",2); break;
+            case '\f':  PUTS(c, "\\f",2); break;
+            case '\n':  PUTS(c, "\\n",2); break;
+            case '\r':  PUTS(c, "\\r",2); break;
+            case '\t':  PUTS(c, "\\t",2); break;
+
+            default:
+                if ((unsigned char)ch < 0x20) {
+                    /* 输出 \u00XX 六个字符*/
+                    char buffer[7];
+                    sprintf(buffer,"\\u%04x",ch);/*04x 4位16进制*/
+                    PUTS(c,buffer,6);
+                } else {
+                    PUTS(c, &s[i], 1);  /*普通字符直接输出*/ 
+                }
+                break;
+            
+        }
+    
+    }
+    PUTS(c, "\"",1); 
 }
 
 static void lept_stringify_value(lept_context* c, const lept_value* v) {
@@ -358,15 +391,36 @@ static void lept_stringify_value(lept_context* c, const lept_value* v) {
         case LEPT_NUMBER: c->top -= 32 - sprintf(lept_context_push(c, 32), "%.17g", v->u.n); break;
         case LEPT_STRING: lept_stringify_string(c, v->u.s.s, v->u.s.len); break;
         case LEPT_ARRAY:
-            /* ... */
+            PUTS(c, "[",  1);
+            size_t i ;
+            i = 0;
+            size_t alen = lept_get_array_size(v);
+            while (i < alen){
+                if(i > 0)PUTS(c,",",1);
+                lept_stringify_value(c, lept_get_array_element(v, i++));
+            }
+            PUTS(c, "]",  1);
             break;
         case LEPT_OBJECT:
-            /* ... */
+            
+            PUTS(c, "{",  1);
+            size_t j ; j = 0;
+            size_t olen = lept_get_object_size(v);
+            while(j < olen){
+                if(j > 0)PUTS(c,",",1);
+                PUTS(c,"\"",1);
+                PUTS(c,lept_get_object_key(v, j),lept_get_object_key_length(v, j));
+                PUTS(c,"\"",1);
+                /*处理value*/
+                PUTS(c,":",1);
+                lept_stringify_value(c, lept_get_object_value(v, j++));
+            }
+            PUTS(c, "}",  1);
             break;
         default: assert(0 && "invalid type");
     }
 }
-
+/*返回一个字符指针*/
 char* lept_stringify(const lept_value* v, size_t* length) {
     lept_context c;
     assert(v != NULL);
