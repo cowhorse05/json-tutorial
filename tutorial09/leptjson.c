@@ -31,6 +31,25 @@ typedef struct {
     size_t size, top;
 }lept_context;
 
+
+static const char* error_messages[] = {
+    "parse ok",
+    "expect value",
+    "invalid value",
+    "root not singular",
+    "number too big",
+    "miss quotation mark",
+    "invalid string escape",
+    "invalid string char",
+    "invalid unicode hex",
+    "invalid unicode surrogate",
+    "miss comma or square bracket",
+    "miss key",
+    "miss colon",
+    "miss comma or curly bracket"
+};
+
+
 static void* lept_context_push(lept_context* c, size_t size) {
     void* ret;
     assert(size > 0);
@@ -807,4 +826,66 @@ void lept_remove_object_value(lept_value* v, size_t index) {
     }
     v->u.o.size--;
 
+}
+
+int lept_is_null(const lept_value* v) {
+    assert(v != NULL);
+    return v->type == LEPT_NULL;
+}
+
+int lept_is_true(const lept_value* v) {
+    assert(v != NULL);
+    return v->type == LEPT_TRUE;
+}
+
+int lept_is_false(const lept_value* v) {
+    assert(v != NULL);
+    return v->type == LEPT_FALSE;
+}
+
+int lept_is_bool(const lept_value* v) {
+    assert(v != NULL);
+    return v->type == LEPT_TRUE || v->type == LEPT_FALSE;
+}
+
+int lept_is_number(const lept_value* v) {
+    assert(v != NULL);
+    return v->type == LEPT_NUMBER;
+}
+
+int lept_is_string(const lept_value* v) {
+    assert(v != NULL);
+    return v->type == LEPT_STRING;
+}
+
+int lept_is_array(const lept_value* v) {
+    assert(v != NULL);
+    return v->type == LEPT_ARRAY;
+}
+
+int lept_is_object(const lept_value* v) {
+    assert(v != NULL);
+    return v->type == LEPT_OBJECT;
+}
+
+int lept_parse_len(lept_value* v, const char* json, size_t length) {
+    assert(v != NULL);
+    assert(json != NULL);
+    
+    /* 创建以 null 结尾的字符串副本 */
+    char* json_copy = (char*)malloc(length + 1);
+    if (!json_copy) return LEPT_PARSE_INVALID_VALUE;
+    
+    memcpy(json_copy, json, length);
+    json_copy[length] = '\0';
+    
+    int ret = lept_parse(v, json_copy);
+    free(json_copy);
+    return ret;
+}
+
+const char* lept_get_error_message(int error_code) {
+    if (error_code >= 0 && error_code < sizeof(error_messages)/sizeof(error_messages[0]))
+        return error_messages[error_code];
+    return "unknown error";
 }

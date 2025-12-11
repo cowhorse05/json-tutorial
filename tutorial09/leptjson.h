@@ -24,6 +24,14 @@ struct lept_member {
     char* k; size_t klen;   /* member key string, key string length */
     lept_value v;           /* member value */
 };
+typedef enum {
+    LEPT_PARSE_DEFAULT = 0,
+    LEPT_PARSE_ALLOW_COMMENTS = 1 << 0,      /* 允许注释 */
+    LEPT_PARSE_ALLOW_TRAILING_COMMAS = 1 << 1, /* 允许尾随逗号 */
+    LEPT_PARSE_ALLOW_NAN_AND_INF = 1 << 2,   /* 允许 NaN 和 Infinity */
+    LEPT_PARSE_PRECISE_FLOAT = 1 << 3,       /* 精确浮点数解析 */
+} lept_parse_option;
+
 
 enum {
     LEPT_PARSE_OK = 0,
@@ -94,4 +102,16 @@ lept_value* lept_find_object_value(lept_value* v, const char* key, size_t klen);
 lept_value* lept_set_object_value(lept_value* v, const char* key, size_t klen);
 void lept_remove_object_value(lept_value* v, size_t index);
 
+int lept_is_null(const lept_value* v);
+int lept_is_true(const lept_value* v);
+int lept_is_false(const lept_value* v);
+int lept_is_bool(const lept_value* v);
+int lept_is_number(const lept_value* v);
+int lept_is_string(const lept_value* v);
+int lept_is_array(const lept_value* v);
+int lept_is_object(const lept_value* v);
+
+int lept_parse_len(lept_value* v, const char* json, size_t length);
+const char* lept_get_error_message(int error_code);
+int lept_parse_with_opts(lept_value* v, const char* json, lept_parse_option opts);
 #endif /* LEPTJSON_H__ */

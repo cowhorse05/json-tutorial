@@ -181,159 +181,11 @@ static void test_parse_options() {
 }
 ```
 
-## 3. 内存分配器抽象
 
-为了性能优化和灵活性，我们引入内存分配器抽象：
 
-```c
-/* leptjson.h */
-typedef struct lept_context lept_context;
+## 3. 集成到 nativejson-benchmark
 
-typedef void* (*lept_malloc_fn)(size_t size, void* userdata);
-typedef void (*lept_free_fn)(void* ptr, void* userdata);
-typedef void* (*lept_realloc_fn)(void* ptr, size_t size, void* userdata);
-
-struct lept_context {
-    lept_malloc_fn malloc_fn;
-    lept_free_fn free_fn;
-    lept_realloc_fn realloc_fn;
-    void* userdata;
-};
-
-void lept_set_context(lept_context* ctx);
-lept_context* lept_get_context(void);
-```
-
-### 3.1 实现默认分配器
-
-```c
-/* leptjson.c */
-static lept_context global_context = {
-    malloc,
-    free,
-    realloc,
-    NULL
-};
-
-static lept_context* current_context = &global_context;
-
-void lept_set_context(lept_context* ctx) {
-    if (ctx == NULL) {
-        current_context = &global_context;
-    } else {
-        current_context = ctx;
-    }
-}
-
-lept_context* lept_get_context(void) {
-    return current_context;
-}
-
-/* 替换所有 malloc/free/realloc 调用 */
-#define LEPT_MALLOC(size) \
-    current_context->malloc_fn((size), current_context->userdata)
-
-#define LEPT_FREE(ptr) \
-    do { \
-        if (ptr) \
-            current_context->free_fn((ptr), current_context->userdata); \
-    } while(0)
-
-#define LEPT_REALLOC(ptr, size) \
-    current_context->realloc_fn((ptr), (size), current_context->userdata)
-```
-
-## 4. 性能优化技巧
-
-### 4.1 SIMD 优化字符串解析
-
-对于现代 CPU，我们可以使用 SIMD 指令加速字符串处理：
-
-```c
-#ifdef __SSE2__
-#include <emmintrin.h>
-
-/* 快速检查字符串是否包含控制字符 */
-static int lept_check_string_sse2(const char* p, size_t len) {
-    __m128i zero = _mm_set1_epi8(0);
-    __m128i space = _mm_set1_epi8(0x20);
-    
-    size_t i = 0;
-    for (; i + 16 <= len; i += 16) {
-        __m128i s = _mm_loadu_si128((const __m128i*)(p + i));
-        __m128i lt_space = _mm_cmplt_epi8(s, space);
-        __m128i eq_zero = _mm_cmpeq_epi8(s, zero);
-        __m128i result = _mm_or_si128(lt_space, eq_zero);
-        if (!_mm_testz_si128(result, result)) {
-            return 0; /* 发现控制字符或空字符 */
-        }
-    }
-    
-    /* 处理剩余字节 */
-    for (; i < len; i++) {
-        if ((unsigned char)p[i] < 0x20 || p[i] == '\0')
-            return 0;
-    }
-    
-    return 1;
-}
-#endif
-```
-
-### 4.2 优化数字解析
-
-使用更快的浮点数解析算法：
-
-```c
-static int lept_parse_number_fast(lept_context* c, lept_value* v) {
-    const char* p = c->json;
-    
-    /* 快速检查是否为整数 */
-    int is_integer = 1;
-    const char* q = p;
-    
-    if (*q == '-') q++;
-    while (*q) {
-        if (*q == '.' || *q == 'e' || *q == 'E') {
-            is_integer = 0;
-            break;
-        }
-        if (!ISDIGIT(*q)) break;
-        q++;
-    }
-    
-    if (is_integer) {
-        /* 使用整数解析，更快 */
-        long long integer = 0;
-        int sign = 1;
-        
-        if (*p == '-') {
-            sign = -1;
-            p++;
-        }
-        
-        while (ISDIGIT(*p)) {
-            if (integer > LLONG_MAX / 10) {
-                /* 溢出，回退到标准解析 */
-                return lept_parse_number(c, v);
-            }
-            integer = integer * 10 + (*p++ - '0');
-        }
-        
-        v->u.n = (double)(integer * sign);
-        v->type = LEPT_NUMBER;
-        c->json = p;
-        return LEPT_PARSE_OK;
-    }
-    
-    /* 否则使用标准解析 */
-    return lept_parse_number(c, v);
-}
-```
-
-## 5. 集成到 nativejson-benchmark
-
-### 5.1 创建适配器文件
+### 3.1 创建适配器文件
 
 我们需要创建一个适配器文件，将我们的库接口适配到 nativejson-benchmark：
 
@@ -394,7 +246,7 @@ public:
 REGISTER_BENCHMARK(LeptJson);
 ```
 
-### 5.2 编写性能测试
+### 3.2 编写性能测试
 
 ```c
 /* test/benchmark.c */
@@ -467,7 +319,7 @@ int main(void) {
 }
 ```
 
-## 6. 与 RapidJSON 对比分析
+## 4. 与 RapidJSON 对比分析
 
 让我们创建一个对比测试：
 
@@ -560,9 +412,9 @@ int main(void) {
 }
 ```
 
-## 7. 总结与展望
+## 5. 总结与展望
 
-### 7.1 性能测试结果分析
+### 5.1 性能测试结果分析
 
 通过基准测试，你可能会发现：
 
@@ -570,7 +422,7 @@ int main(void) {
 2. **内存使用**：由于我们的简单设计，内存使用可能比优化过的库更高
 3. **功能完整性**：缺少一些高级功能（如注释支持、schema 验证等）
 
-### 7.2 可能的优化方向
+### 5.2 可能的优化方向
 
 1. **更高效的内存分配策略**：
    ```c
@@ -583,6 +435,7 @@ int main(void) {
    ```
 
 2. **解析器状态机优化**：
+   
    ```c
    /* 使用查表法加速字符分类 */
    static const unsigned char type_table[256] = {
@@ -596,7 +449,7 @@ int main(void) {
        ['{'] = TYPE_OBJECT
    };
    ```
-
+   
 3. **流式解析支持**：
    ```c
    typedef struct {
@@ -609,7 +462,7 @@ int main(void) {
                        const char* chunk, size_t length);
    ```
 
-### 7.3 练习内容
+### 5.3 练习内容
 
 1. 实现 `lept_parse_with_opts()` 函数，支持不同的解析选项
 2. 为 leptjson 添加内存池分配器，测试性能提升
@@ -617,7 +470,7 @@ int main(void) {
 4. 尝试实现 SIMD 优化的字符串验证函数
 5. 添加 JSON Patch 和 JSON Pointer 支持
 
-### 7.4 结语
+### 5.4 结语
 
 恭喜你完成了从零开始实现 JSON 库的旅程！通过这个教程，你不仅学会了如何实现一个功能完整的 JSON 解析器和生成器，还深入了解了：
 

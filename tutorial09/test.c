@@ -705,7 +705,27 @@ static void test_access() {
     test_access_array();
     test_access_object();
 }
-
+static void test_parse_options() {
+    lept_value v;
+    
+    /* 测试默认选项 */
+    lept_init(&v);
+    EXPECT_EQ_INT(LEPT_PARSE_OK, lept_parse(&v, "123"));
+    EXPECT_EQ_INT(LEPT_NUMBER, lept_get_type(&v));
+    EXPECT_EQ_DOUBLE(123.0, lept_get_number(&v));
+    lept_free(&v);
+    
+    /* 测试允许 NaN 和 Infinity */
+#if 0  /* 待实现 */
+    lept_init(&v);
+    EXPECT_EQ_INT(LEPT_PARSE_OK, 
+        lept_parse_with_opts(&v, "NaN", LEPT_PARSE_ALLOW_NAN_AND_INF));
+    EXPECT_TRUE(isnan(lept_get_number(&v)));
+    lept_free(&v);
+#endif
+    
+    printf("test_parse_options: pass\n");
+}
 int main() {
 #ifdef _WINDOWS
     _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
@@ -717,6 +737,7 @@ int main() {
     test_move();
     test_swap();
     test_access();
+    test_parse_options();
     printf("%d/%d (%3.2f%%) passed\n", test_pass, test_count, test_pass * 100.0 / test_count);
     return main_ret;
 }
