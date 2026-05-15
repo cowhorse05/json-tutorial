@@ -707,24 +707,74 @@ static void test_access() {
 }
 static void test_parse_options() {
     lept_value v;
-    
+
     /* 测试默认选项 */
     lept_init(&v);
     EXPECT_EQ_INT(LEPT_PARSE_OK, lept_parse(&v, "123"));
     EXPECT_EQ_INT(LEPT_NUMBER, lept_get_type(&v));
     EXPECT_EQ_DOUBLE(123.0, lept_get_number(&v));
     lept_free(&v);
-    
-    /* 测试允许 NaN 和 Infinity */
-#if 0  /* 待实现 */
+
+    /* 默认不允许 NaN */
     lept_init(&v);
-    EXPECT_EQ_INT(LEPT_PARSE_OK, 
-        lept_parse_with_opts(&v, "NaN", LEPT_PARSE_ALLOW_NAN_AND_INF));
-    EXPECT_TRUE(isnan(lept_get_number(&v)));
+    EXPECT_EQ_INT(LEPT_PARSE_INVALID_VALUE, lept_parse(&v, "NaN"));
     lept_free(&v);
-#endif
-    
-    printf("test_parse_options: pass\n");
+
+    /* 测试允许 NaN */
+    lept_init(&v);
+    EXPECT_EQ_INT(LEPT_PARSE_OK,
+        lept_parse_with_opts(&v, "NaN", LEPT_PARSE_ALLOW_NAN_AND_INF));
+    EXPECT_EQ_INT(LEPT_NUMBER, lept_get_type(&v));
+    lept_free(&v);
+
+    /* 测试允许 Infinity */
+    lept_init(&v);
+    EXPECT_EQ_INT(LEPT_PARSE_OK,
+        lept_parse_with_opts(&v, "Infinity", LEPT_PARSE_ALLOW_NAN_AND_INF));
+    EXPECT_EQ_INT(LEPT_NUMBER, lept_get_type(&v));
+    lept_free(&v);
+
+    /* 测试允许 -Infinity */
+    lept_init(&v);
+    EXPECT_EQ_INT(LEPT_PARSE_OK,
+        lept_parse_with_opts(&v, "-Infinity", LEPT_PARSE_ALLOW_NAN_AND_INF));
+    EXPECT_EQ_INT(LEPT_NUMBER, lept_get_type(&v));
+    lept_free(&v);
+
+    /* 测试不允许时返回错误 */
+    lept_init(&v);
+    EXPECT_EQ_INT(LEPT_PARSE_INVALID_VALUE,
+        lept_parse_with_opts(&v, "NaN", LEPT_PARSE_DEFAULT));
+    lept_free(&v);
+
+    /* 测试 lept_parse_len */
+    lept_init(&v);
+    EXPECT_EQ_INT(LEPT_PARSE_OK, lept_parse_len(&v, "123xxx", 3));
+    EXPECT_EQ_INT(LEPT_NUMBER, lept_get_type(&v));
+    EXPECT_EQ_DOUBLE(123.0, lept_get_number(&v));
+    lept_free(&v);
+
+    /* 测试 lept_get_error_message */
+    EXPECT_EQ_STRING("parse ok", lept_get_error_message(LEPT_PARSE_OK), strlen("parse ok"));
+    EXPECT_EQ_STRING("invalid value", lept_get_error_message(LEPT_PARSE_INVALID_VALUE), strlen("invalid value"));
+    EXPECT_EQ_STRING("unknown error", lept_get_error_message(99), strlen("unknown error"));
+
+    /* 测试类型检查函数 */
+    lept_init(&v);
+    EXPECT_TRUE(lept_is_null(&v));
+    lept_parse(&v, "true");
+    EXPECT_TRUE(lept_is_true(&v));
+    EXPECT_TRUE(lept_is_bool(&v));
+    EXPECT_FALSE(lept_is_false(&v));
+    lept_parse(&v, "123");
+    EXPECT_TRUE(lept_is_number(&v));
+    lept_parse(&v, "\"hello\"");
+    EXPECT_TRUE(lept_is_string(&v));
+    lept_parse(&v, "[1,2]");
+    EXPECT_TRUE(lept_is_array(&v));
+    lept_parse(&v, "{\"a\":1}");
+    EXPECT_TRUE(lept_is_object(&v));
+    lept_free(&v);
 }
 int main() {
 #ifdef _WINDOWS

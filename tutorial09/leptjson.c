@@ -29,6 +29,7 @@ typedef struct {
     const char* json;
     char* stack;
     size_t size, top;
+    lept_parse_option opts;
 }lept_context;
 
 
@@ -327,6 +328,26 @@ static int lept_parse_object(lept_context* c, lept_value* v) {
 }
 
 static int lept_parse_value(lept_context* c, lept_value* v) {
+    if (c->opts & LEPT_PARSE_ALLOW_NAN_AND_INF) {
+        if (strncmp(c->json, "NaN", 3) == 0) {
+            c->json += 3;
+            v->u.n = NAN;
+            v->type = LEPT_NUMBER;
+            return LEPT_PARSE_OK;
+        }
+        if (strncmp(c->json, "Infinity", 8) == 0) {
+            c->json += 8;
+            v->u.n = INFINITY;
+            v->type = LEPT_NUMBER;
+            return LEPT_PARSE_OK;
+        }
+        if (strncmp(c->json, "-Infinity", 9) == 0) {
+            c->json += 9;
+            v->u.n = -INFINITY;
+            v->type = LEPT_NUMBER;
+            return LEPT_PARSE_OK;
+        }
+    }
     switch (*c->json) {
         case 't':  return lept_parse_literal(c, v, "true", LEPT_TRUE);
         case 'f':  return lept_parse_literal(c, v, "false", LEPT_FALSE);
@@ -346,6 +367,7 @@ int lept_parse(lept_value* v, const char* json) {
     c.json = json;
     c.stack = NULL;
     c.size = c.top = 0;
+    c.opts = LEPT_PARSE_DEFAULT;
     lept_init(v);
     lept_parse_whitespace(&c);
     if ((ret = lept_parse_value(&c, v)) == LEPT_PARSE_OK) {
@@ -444,41 +466,34 @@ void lept_copy(lept_value* dst, const lept_value* src) {
             lept_set_string(dst, src->u.s.s, src->u.s.len);
             break;
         case LEPT_ARRAY:{
-            /* \todo */ /*逐个元素复制*/
             size_t capacity = lept_get_array_capacity(src);
-            lept_set_array(dst, capacity);
-            size_t i;
             size_t size = lept_get_array_size(src);
+            size_t i;
+            lept_set_array(dst, capacity);
             dst->u.a.size = size;
             dst->type = LEPT_ARRAY;
-            for(i = 0; i < size;++i){/*这里递归复制*/
-                /*先初始化*/
+            for(i = 0; i < size;++i){
                 lept_init(&dst->u.a.e[i]);
                 lept_copy(&dst->u.a.e[i],&src->u.a.e[i]);
             }
-            
             break;
         }
-            
+
         case LEPT_OBJECT:{
-            /* \todo *//*逐个元素复制*/
-            lept_set_object(dst, src->u.o.capacity);
             size_t size = lept_get_object_size(src);
+            size_t i;
+            lept_set_object(dst, src->u.o.capacity);
             dst->u.o.size = size;
             dst->type = LEPT_OBJECT;
-            size_t i;
-            for(i = 0; i < size;++i){/*这里递归复制,先复制键，再复制值*/
+            for(i = 0; i < size;++i){
                 size_t klen = src->u.o.m[i].klen;
                 dst->u.o.m[i].klen = klen;
                 memcpy(dst->u.o.m[i].k = (char*)malloc(klen + 1),
                     src->u.o.m[i].k,klen);
                 dst->u.o.m[i].k[klen] = '\0';
-                
-                /*必须初始化*/
                 lept_init(&dst->u.o.m[i].v);
                 lept_copy(&dst->u.o.m[i].v,&src->u.o.m[i].v);
             }
-            
             break;
         }
         default:
@@ -553,14 +568,12 @@ int lept_is_equal(const lept_value* lhs, const lept_value* rhs) {
                     return 0;
             return 1;
         case LEPT_OBJECT:
-            /* \todo */
             if(lhs->u.o.size != rhs->u.o.size)return 0;
             for (i = 0; i < lhs->u.o.size; i++){
-                const char * tmp = lept_get_object_key(lhs, i);/*取得键值，利用lept_find_object_index返回value去比较*/
+                const char * tmp = lept_get_object_key(lhs, i);
                 size_t lhs_klen  = lept_get_object_key_length(lhs, i);
-                size_t rhs_value_index;
-                if((rhs_value_index = lept_find_object_index(rhs, tmp, lhs_klen)) == LEPT_KEY_NOT_EXIST)return 0;
-                /*如果键存在，比较value的类型和值*/
+                size_t rhs_value_index = lept_find_object_index(rhs, tmp, lhs_klen);
+                if(rhs_value_index == LEPT_KEY_NOT_EXIST)return 0;
                 if(!lept_is_equal(&lhs->u.o.m[i].v, &rhs->u.o.m[rhs_value_index].v))return 0;
             }
             
@@ -671,13 +684,12 @@ void lept_popback_array_element(lept_value* v) {
 }
 
 lept_value* lept_insert_array_element(lept_value* v, size_t index) {
+    size_t i;
     assert(v != NULL && v->type == LEPT_ARRAY && index <= v->u.a.size);
-    /* \todo */
-    /*原来位置的元素以此往后推，先重新分配大小*/    
     if(v->u.a.size >=  v->u.a.capacity){
         lept_reserve_array(v, v->u.a.capacity == 0 ? 1 : v->u.a.capacity * 2);
     }
-    size_t i = v->u.a.size;
+    i = v->u.a.size;
     for(;index < i ; --i){
         v->u.a.e[i] = v->u.a.e[i - 1];
     }
@@ -687,18 +699,14 @@ lept_value* lept_insert_array_element(lept_value* v, size_t index) {
 }
 
 void lept_erase_array_element(lept_value* v, size_t index, size_t count) {
+    size_t size, i;
     assert(v != NULL && v->type == LEPT_ARRAY && index + count <= v->u.a.size);
-    /* \todo */
-    size_t size = v->u.a.size;
-    size_t i = index;
-    /*先释放被删除的元素，这样连续的内存不会出问题吗*/
-    for(;i < index + count; ++i){
+    size = v->u.a.size;
+    for(i = index; i < index + count; ++i){
         lept_free(&v->u.a.e[i]);
     }
-    
-    for(i = index + count ;i  < size  ; ++i){
+    for(i = index + count; i < size; ++i){
         v->u.a.e[i-count] = v->u.a.e[i];
-        
     }
     v->u.a.size -= count;
 }
@@ -743,11 +751,9 @@ void lept_shrink_object(lept_value* v) {
 }
 
 void lept_clear_object(lept_value* v) {
-    assert(v != NULL && v->type == LEPT_OBJECT);
-    /* \todo */
     size_t i;
+    assert(v != NULL && v->type == LEPT_OBJECT);
     for(i = 0 ; i < v->u.o.size; ++i){
-        /*释放里面的指针，包括char* k, lept_member，以及v->u.o*/
         lept_member* m = &v->u.o.m[i];
         free(m->k);
         lept_free(&m->v);
@@ -788,12 +794,10 @@ lept_value* lept_find_object_value(lept_value* v, const char* key, size_t klen) 
 }
 
 lept_value* lept_set_object_value(lept_value* v, const char* key, size_t klen) {
+    size_t index;
     assert(v != NULL && v->type == LEPT_OBJECT && key != NULL);
-    /* \todo */
-   /*找到对应的key，设置value,之后初始化*/
-    size_t index = lept_find_object_index(v, key, klen);
+    index = lept_find_object_index(v, key, klen);
     if(index != LEPT_KEY_NOT_EXIST){
-        /*必须先释放，然后再初始化，不然会泄漏*/
         lept_free(&v->u.o.m[index].v);
         lept_init(&(v->u.o.m[index].v));
         return &(v->u.o.m[index].v);
@@ -801,31 +805,24 @@ lept_value* lept_set_object_value(lept_value* v, const char* key, size_t klen) {
         if(v->u.o.size >= v->u.o.capacity){
             lept_reserve_object(v, v->u.o.capacity == 0 ? 1 : v->u.o.capacity * 2);
         }
-        /*设置键 */
         v->u.o.m[v->u.o.size].klen = klen;
         memcpy((v->u.o.m[v->u.o.size].k = (char*)malloc(klen + 1)),key,klen);
         v->u.o.m[v->u.o.size].k[klen] = '\0';
-
         lept_init(&(v->u.o.m[v->u.o.size].v));
         return &(v->u.o.m[v->u.o.size++].v);
     }
 }
 
 void lept_remove_object_value(lept_value* v, size_t index) {
+    size_t i, size;
     assert(v != NULL && v->type == LEPT_OBJECT && index < v->u.o.size);
-    /* \todo 只释放 value，不释放key,那为什么要前移呢？ */
-    /*因为Json对象，键值是一个整体，所以需要释放，不然就是无效的*/
-
     lept_free(&(v->u.o.m[index].v));
     free(v->u.o.m[index].k);
-
-    size_t i = index + 1;
-    size_t size = v->u.o.size;
-    for(;i < size; i ++){
+    size = v->u.o.size;
+    for(i = index + 1; i < size; i++){
         v->u.o.m[i - 1] = v->u.o.m[i];
     }
     v->u.o.size--;
-
 }
 
 int lept_is_null(const lept_value* v) {
@@ -869,17 +866,15 @@ int lept_is_object(const lept_value* v) {
 }
 
 int lept_parse_len(lept_value* v, const char* json, size_t length) {
+    int ret;
+    char* json_copy;
     assert(v != NULL);
     assert(json != NULL);
-    
-    /* 创建以 null 结尾的字符串副本 */
-    char* json_copy = (char*)malloc(length + 1);
+    json_copy = (char*)malloc(length + 1);
     if (!json_copy) return LEPT_PARSE_INVALID_VALUE;
-    
     memcpy(json_copy, json, length);
     json_copy[length] = '\0';
-    
-    int ret = lept_parse(v, json_copy);
+    ret = lept_parse(v, json_copy);
     free(json_copy);
     return ret;
 }
@@ -888,4 +883,26 @@ const char* lept_get_error_message(int error_code) {
     if (error_code >= 0 && error_code < sizeof(error_messages)/sizeof(error_messages[0]))
         return error_messages[error_code];
     return "unknown error";
+}
+
+int lept_parse_with_opts(lept_value* v, const char* json, lept_parse_option opts) {
+    lept_context c;
+    int ret;
+    assert(v != NULL);
+    c.json = json;
+    c.stack = NULL;
+    c.size = c.top = 0;
+    c.opts = opts;
+    lept_init(v);
+    lept_parse_whitespace(&c);
+    if ((ret = lept_parse_value(&c, v)) == LEPT_PARSE_OK) {
+        lept_parse_whitespace(&c);
+        if (*c.json != '\0') {
+            v->type = LEPT_NULL;
+            ret = LEPT_PARSE_ROOT_NOT_SINGULAR;
+        }
+    }
+    assert(c.top == 0);
+    free(c.stack);
+    return ret;
 }
