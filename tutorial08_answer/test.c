@@ -460,7 +460,6 @@ static void test_equal() {
     TEST_EQUAL("[1,2,3]", "[1,2,3]", 1);
     TEST_EQUAL("[1,2,3]", "[1,2,3,4]", 0);
     TEST_EQUAL("[[]]", "[[]]", 1);
-#if 0
     TEST_EQUAL("{}", "{}", 1);
     TEST_EQUAL("{}", "null", 0);
     TEST_EQUAL("{}", "[]", 0);
@@ -470,7 +469,6 @@ static void test_equal() {
     TEST_EQUAL("{\"a\":1,\"b\":2}", "{\"a\":1,\"b\":2,\"c\":3}", 0);
     TEST_EQUAL("{\"a\":{\"b\":{\"c\":{}}}}", "{\"a\":{\"b\":{\"c\":{}}}}", 1);
     TEST_EQUAL("{\"a\":{\"b\":{\"c\":{}}}}", "{\"a\":{\"b\":{\"c\":[]}}}", 0);
-#endif
 }
 
 static void test_copy() {
@@ -578,7 +576,6 @@ static void test_access_array() {
     for (i = 0; i < 9; i++)
         EXPECT_EQ_DOUBLE((double)i, lept_get_number(lept_get_array_element(&a, i)));
 
-#if 0
     lept_erase_array_element(&a, 4, 0);
     EXPECT_EQ_SIZE_T(9, lept_get_array_size(&a));
     for (i = 0; i < 9; i++)
@@ -601,7 +598,7 @@ static void test_access_array() {
         lept_move(lept_insert_array_element(&a, i), &e);
         lept_free(&e);
     }
-
+    
     EXPECT_EQ_SIZE_T(8, lept_get_array_size(&a));
     for (i = 0; i < 8; i++)
         EXPECT_EQ_DOUBLE((double)i, lept_get_number(lept_get_array_element(&a, i)));
@@ -623,13 +620,12 @@ static void test_access_array() {
     EXPECT_EQ_SIZE_T(i, lept_get_array_capacity(&a));   /* capacity remains unchanged */
     lept_shrink_array(&a);
     EXPECT_EQ_SIZE_T(0, lept_get_array_capacity(&a));
-#endif
 
     lept_free(&a);
 }
 
 static void test_access_object() {
-#if 0
+
     lept_value o, v, *pv;
     size_t i, j, index;
 
@@ -658,7 +654,7 @@ static void test_access_object() {
         }
     }
 
-    index = lept_find_object_index(&o, "j", 1);
+    index = lept_find_object_index(&o, "j", 1);    
     EXPECT_TRUE(index != LEPT_KEY_NOT_EXIST);
     lept_remove_object_value(&o, index);
     index = lept_find_object_index(&o, "j", 1);
@@ -683,7 +679,7 @@ static void test_access_object() {
     }
 
     lept_set_string(&v, "Hello", 5);
-    lept_move(lept_set_object_value(&o, "World", 5), &v);
+    lept_move(lept_set_object_value(&o, "World", 5), &v); /* Test if element is freed */
     lept_free(&v);
 
     pv = lept_find_object_value(&o, "World", 5);
@@ -693,12 +689,12 @@ static void test_access_object() {
     i = lept_get_object_capacity(&o);
     lept_clear_object(&o);
     EXPECT_EQ_SIZE_T(0, lept_get_object_size(&o));
-    EXPECT_EQ_SIZE_T(i, lept_get_object_capacity(&o));
+    EXPECT_EQ_SIZE_T(i, lept_get_object_capacity(&o)); /* capacity remains unchanged */
     lept_shrink_object(&o);
     EXPECT_EQ_SIZE_T(0, lept_get_object_capacity(&o));
 
     lept_free(&o);
-#endif
+
 }
 
 static void test_access() {

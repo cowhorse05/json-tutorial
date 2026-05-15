@@ -29,7 +29,6 @@ typedef struct {
     const char* json;
     char* stack;
     size_t size, top;
-    lept_parse_option opts;
 }lept_context;
 
 
@@ -328,26 +327,6 @@ static int lept_parse_object(lept_context* c, lept_value* v) {
 }
 
 static int lept_parse_value(lept_context* c, lept_value* v) {
-    if (c->opts & LEPT_PARSE_ALLOW_NAN_AND_INF) {
-        if (strncmp(c->json, "NaN", 3) == 0) {
-            c->json += 3;
-            v->u.n = NAN;
-            v->type = LEPT_NUMBER;
-            return LEPT_PARSE_OK;
-        }
-        if (strncmp(c->json, "Infinity", 8) == 0) {
-            c->json += 8;
-            v->u.n = INFINITY;
-            v->type = LEPT_NUMBER;
-            return LEPT_PARSE_OK;
-        }
-        if (strncmp(c->json, "-Infinity", 9) == 0) {
-            c->json += 9;
-            v->u.n = -INFINITY;
-            v->type = LEPT_NUMBER;
-            return LEPT_PARSE_OK;
-        }
-    }
     switch (*c->json) {
         case 't':  return lept_parse_literal(c, v, "true", LEPT_TRUE);
         case 'f':  return lept_parse_literal(c, v, "false", LEPT_FALSE);
@@ -367,7 +346,6 @@ int lept_parse(lept_value* v, const char* json) {
     c.json = json;
     c.stack = NULL;
     c.size = c.top = 0;
-    c.opts = LEPT_PARSE_DEFAULT;
     lept_init(v);
     lept_parse_whitespace(&c);
     if ((ret = lept_parse_value(&c, v)) == LEPT_PARSE_OK) {
@@ -886,23 +864,6 @@ const char* lept_get_error_message(int error_code) {
 }
 
 int lept_parse_with_opts(lept_value* v, const char* json, lept_parse_option opts) {
-    lept_context c;
-    int ret;
-    assert(v != NULL);
-    c.json = json;
-    c.stack = NULL;
-    c.size = c.top = 0;
-    c.opts = opts;
-    lept_init(v);
-    lept_parse_whitespace(&c);
-    if ((ret = lept_parse_value(&c, v)) == LEPT_PARSE_OK) {
-        lept_parse_whitespace(&c);
-        if (*c.json != '\0') {
-            v->type = LEPT_NULL;
-            ret = LEPT_PARSE_ROOT_NOT_SINGULAR;
-        }
-    }
-    assert(c.top == 0);
-    free(c.stack);
-    return ret;
+    /* \todo */
+    return LEPT_PARSE_INVALID_VALUE;
 }

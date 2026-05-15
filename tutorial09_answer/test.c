@@ -460,7 +460,6 @@ static void test_equal() {
     TEST_EQUAL("[1,2,3]", "[1,2,3]", 1);
     TEST_EQUAL("[1,2,3]", "[1,2,3,4]", 0);
     TEST_EQUAL("[[]]", "[[]]", 1);
-#if 0
     TEST_EQUAL("{}", "{}", 1);
     TEST_EQUAL("{}", "null", 0);
     TEST_EQUAL("{}", "[]", 0);
@@ -470,7 +469,6 @@ static void test_equal() {
     TEST_EQUAL("{\"a\":1,\"b\":2}", "{\"a\":1,\"b\":2,\"c\":3}", 0);
     TEST_EQUAL("{\"a\":{\"b\":{\"c\":{}}}}", "{\"a\":{\"b\":{\"c\":{}}}}", 1);
     TEST_EQUAL("{\"a\":{\"b\":{\"c\":{}}}}", "{\"a\":{\"b\":{\"c\":[]}}}", 0);
-#endif
 }
 
 static void test_copy() {
@@ -578,7 +576,6 @@ static void test_access_array() {
     for (i = 0; i < 9; i++)
         EXPECT_EQ_DOUBLE((double)i, lept_get_number(lept_get_array_element(&a, i)));
 
-#if 0
     lept_erase_array_element(&a, 4, 0);
     EXPECT_EQ_SIZE_T(9, lept_get_array_size(&a));
     for (i = 0; i < 9; i++)
@@ -601,7 +598,7 @@ static void test_access_array() {
         lept_move(lept_insert_array_element(&a, i), &e);
         lept_free(&e);
     }
-
+    
     EXPECT_EQ_SIZE_T(8, lept_get_array_size(&a));
     for (i = 0; i < 8; i++)
         EXPECT_EQ_DOUBLE((double)i, lept_get_number(lept_get_array_element(&a, i)));
@@ -623,13 +620,12 @@ static void test_access_array() {
     EXPECT_EQ_SIZE_T(i, lept_get_array_capacity(&a));   /* capacity remains unchanged */
     lept_shrink_array(&a);
     EXPECT_EQ_SIZE_T(0, lept_get_array_capacity(&a));
-#endif
 
     lept_free(&a);
 }
 
 static void test_access_object() {
-#if 0
+
     lept_value o, v, *pv;
     size_t i, j, index;
 
@@ -658,7 +654,7 @@ static void test_access_object() {
         }
     }
 
-    index = lept_find_object_index(&o, "j", 1);
+    index = lept_find_object_index(&o, "j", 1);    
     EXPECT_TRUE(index != LEPT_KEY_NOT_EXIST);
     lept_remove_object_value(&o, index);
     index = lept_find_object_index(&o, "j", 1);
@@ -683,7 +679,7 @@ static void test_access_object() {
     }
 
     lept_set_string(&v, "Hello", 5);
-    lept_move(lept_set_object_value(&o, "World", 5), &v);
+    lept_move(lept_set_object_value(&o, "World", 5), &v); /* Test if element is freed */
     lept_free(&v);
 
     pv = lept_find_object_value(&o, "World", 5);
@@ -693,12 +689,12 @@ static void test_access_object() {
     i = lept_get_object_capacity(&o);
     lept_clear_object(&o);
     EXPECT_EQ_SIZE_T(0, lept_get_object_size(&o));
-    EXPECT_EQ_SIZE_T(i, lept_get_object_capacity(&o));
+    EXPECT_EQ_SIZE_T(i, lept_get_object_capacity(&o)); /* capacity remains unchanged */
     lept_shrink_object(&o);
     EXPECT_EQ_SIZE_T(0, lept_get_object_capacity(&o));
 
     lept_free(&o);
-#endif
+
 }
 
 static void test_access() {
@@ -709,7 +705,77 @@ static void test_access() {
     test_access_array();
     test_access_object();
 }
+static void test_parse_options() {
+    lept_value v;
 
+    /* 测试默认选项 */
+    lept_init(&v);
+    EXPECT_EQ_INT(LEPT_PARSE_OK, lept_parse(&v, "123"));
+    EXPECT_EQ_INT(LEPT_NUMBER, lept_get_type(&v));
+    EXPECT_EQ_DOUBLE(123.0, lept_get_number(&v));
+    lept_free(&v);
+
+    /* 默认不允许 NaN */
+    lept_init(&v);
+    EXPECT_EQ_INT(LEPT_PARSE_INVALID_VALUE, lept_parse(&v, "NaN"));
+    lept_free(&v);
+
+    /* 测试允许 NaN */
+    lept_init(&v);
+    EXPECT_EQ_INT(LEPT_PARSE_OK,
+        lept_parse_with_opts(&v, "NaN", LEPT_PARSE_ALLOW_NAN_AND_INF));
+    EXPECT_EQ_INT(LEPT_NUMBER, lept_get_type(&v));
+    lept_free(&v);
+
+    /* 测试允许 Infinity */
+    lept_init(&v);
+    EXPECT_EQ_INT(LEPT_PARSE_OK,
+        lept_parse_with_opts(&v, "Infinity", LEPT_PARSE_ALLOW_NAN_AND_INF));
+    EXPECT_EQ_INT(LEPT_NUMBER, lept_get_type(&v));
+    lept_free(&v);
+
+    /* 测试允许 -Infinity */
+    lept_init(&v);
+    EXPECT_EQ_INT(LEPT_PARSE_OK,
+        lept_parse_with_opts(&v, "-Infinity", LEPT_PARSE_ALLOW_NAN_AND_INF));
+    EXPECT_EQ_INT(LEPT_NUMBER, lept_get_type(&v));
+    lept_free(&v);
+
+    /* 测试不允许时返回错误 */
+    lept_init(&v);
+    EXPECT_EQ_INT(LEPT_PARSE_INVALID_VALUE,
+        lept_parse_with_opts(&v, "NaN", LEPT_PARSE_DEFAULT));
+    lept_free(&v);
+
+    /* 测试 lept_parse_len */
+    lept_init(&v);
+    EXPECT_EQ_INT(LEPT_PARSE_OK, lept_parse_len(&v, "123xxx", 3));
+    EXPECT_EQ_INT(LEPT_NUMBER, lept_get_type(&v));
+    EXPECT_EQ_DOUBLE(123.0, lept_get_number(&v));
+    lept_free(&v);
+
+    /* 测试 lept_get_error_message */
+    EXPECT_EQ_STRING("parse ok", lept_get_error_message(LEPT_PARSE_OK), strlen("parse ok"));
+    EXPECT_EQ_STRING("invalid value", lept_get_error_message(LEPT_PARSE_INVALID_VALUE), strlen("invalid value"));
+    EXPECT_EQ_STRING("unknown error", lept_get_error_message(99), strlen("unknown error"));
+
+    /* 测试类型检查函数 */
+    lept_init(&v);
+    EXPECT_TRUE(lept_is_null(&v));
+    lept_parse(&v, "true");
+    EXPECT_TRUE(lept_is_true(&v));
+    EXPECT_TRUE(lept_is_bool(&v));
+    EXPECT_FALSE(lept_is_false(&v));
+    lept_parse(&v, "123");
+    EXPECT_TRUE(lept_is_number(&v));
+    lept_parse(&v, "\"hello\"");
+    EXPECT_TRUE(lept_is_string(&v));
+    lept_parse(&v, "[1,2]");
+    EXPECT_TRUE(lept_is_array(&v));
+    lept_parse(&v, "{\"a\":1}");
+    EXPECT_TRUE(lept_is_object(&v));
+    lept_free(&v);
+}
 int main() {
 #ifdef _WINDOWS
     _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
@@ -721,6 +787,7 @@ int main() {
     test_move();
     test_swap();
     test_access();
+    test_parse_options();
     printf("%d/%d (%3.2f%%) passed\n", test_pass, test_count, test_pass * 100.0 / test_count);
     return main_ret;
 }
